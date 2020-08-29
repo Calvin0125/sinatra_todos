@@ -16,22 +16,33 @@ class DatabasePersistence
   end
 
   def find_list(id)
-    sql = "SELECT * FROM lists WHERE id = $1"
-    puts "#{sql}: #{id}"
+    sql = <<~SQL
+      SELECT lists.*,
+        COUNT(todos.id) AS todos_count,
+        COUNT(NULLIF(todos.completed, true)) AS todos_remaining_count
+        FROM lists
+        LEFT JOIN todos ON todos.list_id = lists.id
+        WHERE lists.id = $1
+        GROUP BY lists.id
+        ORDER BY lists.name;
+      SQL
     result = query(sql, id)
-    tuple = result.first
-    list_id = tuple["id"].to_i
-    todos = find_todos_for_list(list_id)
-    {id: tuple["id"], name: tuple["name"], todos: todos}
+    tuple_to_list_hash(result.first)
   end
 
   def all_lists
-    sql = "SELECT * FROM lists"
+    sql = <<~SQL
+      SELECT lists.*,
+        COUNT(todos.id) AS todos_count,
+        COUNT(NULLIF(todos.completed, true)) AS todos_remaining_count
+        FROM lists
+        LEFT JOIN todos ON todos.list_id = lists.id
+        GROUP BY lists.id
+        ORDER BY lists.name;
+      SQL
     result = query(sql)
     result.map do |tuple|
-      list_id = tuple["id"].to_i
-      todos = find_todos_for_list(list_id)
-      {id: list_id, name: tuple["name"], todos: todos}
+      tuple_to_list_hash(tuple)
     end
   end
 
@@ -76,8 +87,6 @@ class DatabasePersistence
     @db.close
   end
 
-  private
-
   def find_todos_for_list(list_id)
     todo_sql = "SELECT * FROM todos WHERE list_id = $1"
     todos_result = query(todo_sql, list_id)
@@ -90,8 +99,17 @@ class DatabasePersistence
     end
   end
 
+  private
+
   def next_element_id(elements)
     max = elements.map { |todo| todo[:id] }.max || 0
     max + 1
+  end
+
+  def tuple_to_list_hash(tuple)
+    { id: tuple["id"].to_i, 
+      name: tuple["name"], 
+      todos_count: tuple["todos_count"].to_i,
+      todos_remaining_count: tuple["todos_remaining_count"].to_i }
   end
 end
