@@ -72,6 +72,10 @@ class DatabasePersistence
     query(sql, new_name, id)
   end
 
+  def disconnect
+    @db.close
+  end
+
   private
 
   def find_todos_for_list(list_id)
